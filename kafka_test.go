@@ -14,7 +14,7 @@ func TestKafkaPublishing(t *testing.T) {
 	msg := KafkaMessage{
 		HostIP:         "0.0.0.0",
 		Region:         "s2r1",
-		NumHypervisors: 1,
+		NumHypervisors: "1",
 		RegionID:       98,
 		Token:          "zyx",
 		CloudProvider:  "oracle",

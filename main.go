@@ -22,7 +22,7 @@ const (
 
 type ProvisionRequest struct {
 	Region         string `json:"region"`
-	NumHypervisors int    `json:"num_hypervisors"`
+	NumHypervisors string    `json:"num_hypervisors"`
 	RegionID       int    `json:"regionId"`
 	Token          string `json:"token"`
 	CloudProvider  string `json:"cloudProvider"`
@@ -47,7 +47,7 @@ type TrackResponse struct {
 type KafkaMessage struct {
 	HostIP         string `json:"host_ip"`
 	Region         string `json:"region"`
-	NumHypervisors int    `json:"num_hypervisors"`
+	NumHypervisors string    `json:"num_hypervisors"`
 	RegionID       int    `json:"regionId"`
 	Token          string `json:"token"`
 	CloudProvider  string `json:"cloudProvider"`
@@ -219,7 +219,6 @@ func publishToKafka(privateIP string, originalReq ProvisionRequest) {
 	msg := KafkaMessage{
 		HostIP:         privateIP,
 		Region:         originalReq.Region,
-		NumHypervisors: originalReq.NumHypervisors,
 		RegionID:       originalReq.RegionID,
 		Token:          originalReq.Token,
 		CloudProvider:  originalReq.CloudProvider,
