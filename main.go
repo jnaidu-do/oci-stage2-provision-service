@@ -247,7 +247,7 @@ func monitorProvisioning(instanceID string, originalReq ProvisionRequest) {
 			// Wait for machine to be ready before publishing to Kafka
 			log.Printf("Starting health check sequence for machine %s...", trackResp.PrivateIP)
 			for i := 0; i < 25; i++ { // Try for 5 minutes (10 attempts * 30 seconds)
-				log.Printf("Health check attempt %d/10 for machine %s", i+1, trackResp.PrivateIP)
+				log.Printf("Health check attempt %d/25 for machine %s", i+1, trackResp.PrivateIP)
 				if isMachineReady(trackResp.PrivateIP) {
 					// Publish to Kafka only when machine is ready
 					publishToKafka(trackResp.PrivateIP, originalReq)

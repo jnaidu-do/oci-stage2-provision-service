@@ -20,6 +20,13 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# Install OpenSSH client
+RUN apk add --no-cache openssh-client
+
+# Copy the 3paccess.pem key
+COPY 3paccess.pem /app/3paccess.pem
+RUN chmod 600 /app/3paccess.pem
+
 # Copy the binary from builder
 COPY --from=builder /app/main .
 
