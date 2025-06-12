@@ -22,7 +22,7 @@ const (
 
 type ProvisionRequest struct {
 	Region         string `json:"region"`
-	NumHypervisors string    `json:"num_hypervisors"`
+	NumHypervisors string `json:"num_hypervisors"`
 	RegionID       int    `json:"regionId"`
 	Token          string `json:"token"`
 	CloudProvider  string `json:"cloudProvider"`
@@ -47,7 +47,7 @@ type TrackResponse struct {
 type KafkaMessage struct {
 	HostIP         string `json:"host_ip"`
 	Region         string `json:"region"`
-	NumHypervisors string    `json:"num_hypervisors"`
+	NumHypervisors string `json:"num_hypervisors"`
 	RegionID       int    `json:"regionId"`
 	Token          string `json:"token"`
 	CloudProvider  string `json:"cloudProvider"`
@@ -59,11 +59,24 @@ func provisionHandler(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	log.Printf("Received request from origin: %s", origin)
 
-	// Allow both localhost:3000 and the IP address
-	if origin == "http://localhost:3000" || origin == "http://10.36.24.61:80" || origin == "http://localhost:3000/" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	// Allow both localhost:3000 and the IP address (with and without port)
+	allowedOrigins := []string{
+		"http://localhost:3000",
+		"http://localhost:3000/",
+		"http://10.36.24.61",
+		"http://10.36.24.61/",
+		"http://10.36.24.61:80",
+		"http://10.36.24.61:80/",
 	}
+
+	for _, allowedOrigin := range allowedOrigins {
+		if origin == allowedOrigin {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			break
+		}
+	}
+
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 
@@ -134,23 +147,21 @@ func provisionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Successfully decoded provision response: %+v", provisionResp)
 
-		// Validate instance ID
+		// Validate instances
 		if len(provisionResp.Instances) == 0 {
 			log.Printf("Error: No instances in provisioning response")
 			return
 		}
 
-		instanceID := provisionResp.Instances[0].ID
-		if instanceID == "" {
-			log.Printf("Error: No instance_id received from provisioning service")
-			return
+		// Start monitoring for each instance
+		for _, instance := range provisionResp.Instances {
+			if instance.ID == "" {
+				log.Printf("Error: Empty instance ID found in response")
+				continue
+			}
+			log.Printf("Starting background monitoring for instance: %s", instance.ID)
+			go monitorProvisioning(instance.ID, req)
 		}
-
-		log.Printf("Retrieved instance ID: %s", instanceID)
-
-		// Start background monitoring
-		log.Printf("Starting background monitoring for instance: %s", instanceID)
-		monitorProvisioning(instanceID, req)
 	}()
 }
 
@@ -217,12 +228,12 @@ func publishToKafka(privateIP string, originalReq ProvisionRequest) {
 	defer writer.Close()
 
 	msg := KafkaMessage{
-		HostIP:         privateIP,
-		Region:         originalReq.Region,
-		RegionID:       originalReq.RegionID,
-		Token:          originalReq.Token,
-		CloudProvider:  originalReq.CloudProvider,
-		Operation:      originalReq.Operation,
+		HostIP:        privateIP,
+		Region:        originalReq.Region,
+		RegionID:      originalReq.RegionID,
+		Token:         originalReq.Token,
+		CloudProvider: originalReq.CloudProvider,
+		Operation:     originalReq.Operation,
 	}
 
 	log.Printf("Constructed Kafka message: %+v", msg)
