@@ -178,9 +178,27 @@ func isMachineReady(privateIP string) bool {
 		log.Printf("Ping output: %s", string(output))
 		return false
 	}
-
 	log.Printf("Ping output: %s", string(output))
-	log.Printf("Machine %s is ready (ping successful)", privateIP)
+	log.Printf("Ping successful, attempting SSH...")
+
+	// Try to SSH to the machine using 3paccess.pem
+	log.Printf("Attempting to SSH into machine at %s...", privateIP)
+	sshCmd := exec.Command("ssh",
+		"-i", "3paccess.pem",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "ConnectTimeout=5",
+		fmt.Sprintf("root@%s", privateIP),
+		"echo 'SSH connection successful'")
+
+	sshOutput, err := sshCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("SSH to %s failed: %v", privateIP, err)
+		log.Printf("SSH output: %s", string(sshOutput))
+		return false
+	}
+	log.Printf("SSH output: %s", string(sshOutput))
+
+	log.Printf("Machine %s is ready (ping and SSH successful)", privateIP)
 	return true
 }
 
