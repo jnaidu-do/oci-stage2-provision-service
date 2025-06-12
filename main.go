@@ -45,13 +45,15 @@ type TrackResponse struct {
 }
 
 type KafkaMessage struct {
-	HostIP         string `json:"host_ip"`
-	Region         string `json:"region"`
-	NumHypervisors string `json:"num_hypervisors"`
-	RegionID       int    `json:"regionId"`
-	Token          string `json:"token"`
-	CloudProvider  string `json:"cloudProvider"`
-	Operation      string `json:"operation"`
+	Payload struct {
+		HostIP         string `json:"host_ip"`
+		Region         string `json:"region"`
+		NumHypervisors string `json:"num_hypervisors"`
+		RegionID       int    `json:"regionId"`
+		Token          string `json:"token"`
+		CloudProvider  string `json:"cloudProvider"`
+		Operation      string `json:"operation"`
+	} `json:"payload"`
 }
 
 func provisionHandler(w http.ResponseWriter, r *http.Request) {
@@ -227,14 +229,14 @@ func publishToKafka(privateIP string, originalReq ProvisionRequest) {
 
 	defer writer.Close()
 
-	msg := KafkaMessage{
-		HostIP:        privateIP,
-		Region:        originalReq.Region,
-		RegionID:      originalReq.RegionID,
-		Token:         originalReq.Token,
-		CloudProvider: originalReq.CloudProvider,
-		Operation:     originalReq.Operation,
-	}
+	msg := KafkaMessage{}
+	msg.Payload.HostIP = privateIP
+	msg.Payload.Region = originalReq.Region
+	msg.Payload.NumHypervisors = originalReq.NumHypervisors
+	msg.Payload.RegionID = originalReq.RegionID
+	msg.Payload.Token = originalReq.Token
+	msg.Payload.CloudProvider = originalReq.CloudProvider
+	msg.Payload.Operation = originalReq.Operation
 
 	log.Printf("Constructed Kafka message: %+v", msg)
 
