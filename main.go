@@ -57,11 +57,15 @@ type KafkaMessage struct {
 func provisionHandler(w http.ResponseWriter, r *http.Request) {
 	// Set CORS headers
 	origin := r.Header.Get("Origin")
-	if origin == "http://localhost:3000" || origin == "http://10.36.24.61:80" {
+	log.Printf("Received request from origin: %s", origin)
+
+	// Allow both localhost:3000 and the IP address
+	if origin == "http://localhost:3000" || origin == "http://10.36.24.61:80" || origin == "http://localhost:3000/" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 
 	// Handle preflight requests
 	if r.Method == http.MethodOptions {
