@@ -11,15 +11,14 @@ import (
 
 func TestKafkaPublishing(t *testing.T) {
 	// Test message
-	msg := KafkaMessage{
-		HostIP:         "0.0.0.0",
-		Region:         "s2r1",
-		NumHypervisors: "1",
-		RegionID:       98,
-		Token:          "zyx",
-		CloudProvider:  "oracle",
-		Operation:      "setup_hypervisor",
-	}
+	msg := KafkaMessage{}
+	msg.Payload.HostIP = "0.0.0.0"
+	msg.Payload.Region = "s2r1"
+	msg.Payload.NumHypervisors = "1"
+	msg.Payload.RegionID = 98
+	msg.Payload.Token = "zyx"
+	msg.Payload.CloudProvider = "oracle"
+	msg.Payload.Operation = "setup_hypervisor"
 
 	// Create Kafka writer
 	writer := kafka.NewWriter(kafka.WriterConfig{
@@ -70,26 +69,26 @@ func TestKafkaPublishing(t *testing.T) {
 	}
 
 	// Verify message content
-	if receivedKafkaMsg.HostIP != msg.HostIP {
-		t.Errorf("HostIP mismatch: got %v, want %v", receivedKafkaMsg.HostIP, msg.HostIP)
+	if receivedKafkaMsg.Payload.HostIP != msg.Payload.HostIP {
+		t.Errorf("HostIP mismatch: got %v, want %v", receivedKafkaMsg.Payload.HostIP, msg.Payload.HostIP)
 	}
-	if receivedKafkaMsg.Region != msg.Region {
-		t.Errorf("Region mismatch: got %v, want %v", receivedKafkaMsg.Region, msg.Region)
+	if receivedKafkaMsg.Payload.Region != msg.Payload.Region {
+		t.Errorf("Region mismatch: got %v, want %v", receivedKafkaMsg.Payload.Region, msg.Payload.Region)
 	}
-	if receivedKafkaMsg.NumHypervisors != msg.NumHypervisors {
-		t.Errorf("NumHypervisors mismatch: got %v, want %v", receivedKafkaMsg.NumHypervisors, msg.NumHypervisors)
+	if receivedKafkaMsg.Payload.NumHypervisors != msg.Payload.NumHypervisors {
+		t.Errorf("NumHypervisors mismatch: got %v, want %v", receivedKafkaMsg.Payload.NumHypervisors, msg.Payload.NumHypervisors)
 	}
-	if receivedKafkaMsg.RegionID != msg.RegionID {
-		t.Errorf("RegionID mismatch: got %v, want %v", receivedKafkaMsg.RegionID, msg.RegionID)
+	if receivedKafkaMsg.Payload.RegionID != msg.Payload.RegionID {
+		t.Errorf("RegionID mismatch: got %v, want %v", receivedKafkaMsg.Payload.RegionID, msg.Payload.RegionID)
 	}
-	if receivedKafkaMsg.Token != msg.Token {
-		t.Errorf("Token mismatch: got %v, want %v", receivedKafkaMsg.Token, msg.Token)
+	if receivedKafkaMsg.Payload.Token != msg.Payload.Token {
+		t.Errorf("Token mismatch: got %v, want %v", receivedKafkaMsg.Payload.Token, msg.Payload.Token)
 	}
-	if receivedKafkaMsg.CloudProvider != msg.CloudProvider {
-		t.Errorf("CloudProvider mismatch: got %v, want %v", receivedKafkaMsg.CloudProvider, msg.CloudProvider)
+	if receivedKafkaMsg.Payload.CloudProvider != msg.Payload.CloudProvider {
+		t.Errorf("CloudProvider mismatch: got %v, want %v", receivedKafkaMsg.Payload.CloudProvider, msg.Payload.CloudProvider)
 	}
-	if receivedKafkaMsg.Operation != msg.Operation {
-		t.Errorf("Operation mismatch: got %v, want %v", receivedKafkaMsg.Operation, msg.Operation)
+	if receivedKafkaMsg.Payload.Operation != msg.Payload.Operation {
+		t.Errorf("Operation mismatch: got %v, want %v", receivedKafkaMsg.Payload.Operation, msg.Payload.Operation)
 	}
 
 	t.Logf("Successfully verified message in Kafka: %+v", receivedKafkaMsg)
