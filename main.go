@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os/exec"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -167,6 +168,19 @@ func provisionHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func isMachineReady(privateIP string) bool {
+	log.Printf("Attempting to ping machine at %s...", privateIP)
+	// Try to ping the machine
+	cmd := exec.Command("ping", "-c", "1", "-W", "5", privateIP)
+	if err := cmd.Run(); err != nil {
+		log.Printf("Ping to %s failed: %v", privateIP, err)
+		return false
+	}
+
+	log.Printf("Machine %s is ready (ping successful)", privateIP)
+	return true
+}
+
 func monitorProvisioning(instanceID string, originalReq ProvisionRequest) {
 	if instanceID == "" {
 		log.Printf("Error: Cannot monitor provisioning with empty instance ID")
@@ -208,7 +222,20 @@ func monitorProvisioning(instanceID string, originalReq ProvisionRequest) {
 		log.Printf("Current instance state: %s", trackResp.LifecycleState)
 		if trackResp.LifecycleState == "RUNNING" {
 			log.Printf("Instance is now RUNNING, private IP: %s", trackResp.PrivateIP)
-			// Publish to Kafka
+
+			// Wait for machine to be ready before publishing to Kafka
+			log.Printf("Starting health check sequence for machine %s...", trackResp.PrivateIP)
+			for i := 0; i < 10; i++ { // Try for 5 minutes (10 attempts * 30 seconds)
+				log.Printf("Health check attempt %d/10 for machine %s", i+1, trackResp.PrivateIP)
+				if isMachineReady(trackResp.PrivateIP) {
+					// Publish to Kafka only when machine is ready
+					publishToKafka(trackResp.PrivateIP, originalReq)
+					return
+				}
+				log.Printf("Machine not ready yet, waiting 30 seconds before next attempt...")
+				time.Sleep(30 * time.Second)
+			}
+			log.Printf("Machine did not become ready after 5 minutes, proceeding with Kafka message anyway")
 			publishToKafka(trackResp.PrivateIP, originalReq)
 			return
 		}
