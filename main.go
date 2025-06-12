@@ -55,6 +55,20 @@ type KafkaMessage struct {
 }
 
 func provisionHandler(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	origin := r.Header.Get("Origin")
+	if origin == "http://localhost:3000" || origin == "http://10.36.24.61:80" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Handle preflight requests
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	log.Printf("Received new provisioning request")
 	if r.Method != http.MethodPost {
 		log.Printf("Invalid method: %s", r.Method)
