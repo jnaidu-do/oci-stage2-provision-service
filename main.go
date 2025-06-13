@@ -61,15 +61,26 @@ type KafkaMessage struct {
 // Create a channel for log messages
 var logChan = make(chan string, 100)
 
+// Store recent logs in memory
+var logHistory []string
+
+const maxLogHistory = 1000 // Keep last 1000 log messages
+
 // Custom logger that writes to both stdout and our channel
 type logWriter struct {
 	*log.Logger
 }
 
 func (w *logWriter) Write(p []byte) (n int, err error) {
+	msg := string(p)
+	// Add to history
+	logHistory = append(logHistory, msg)
+	if len(logHistory) > maxLogHistory {
+		logHistory = logHistory[1:]
+	}
 	// Write to the channel
 	select {
-	case logChan <- string(p):
+	case logChan <- msg:
 	default:
 		// If channel is full, drop the message
 	}
@@ -266,8 +277,8 @@ func monitorProvisioning(instanceID string, originalReq ProvisionRequest) {
 
 			// Wait for machine to be ready before publishing to Kafka
 			log.Printf("Starting health check sequence for machine %s...", trackResp.PrivateIP)
-			for i := 0; i < 25; i++ { // Try for 5 minutes (10 attempts * 30 seconds)
-				log.Printf("Health check attempt %d/25 for machine %s", i+1, trackResp.PrivateIP)
+			for i := 0; i < 35; i++ { // Try for 5 minutes (10 attempts * 30 seconds)
+				log.Printf("Health check attempt %d/35 for machine %s", i+1, trackResp.PrivateIP)
 				if isMachineReady(trackResp.PrivateIP) {
 					// Publish to Kafka only when machine is ready
 					publishToKafka(trackResp.PrivateIP, originalReq)
@@ -326,22 +337,52 @@ func publishToKafka(privateIP string, originalReq ProvisionRequest) {
 }
 
 func logsHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request for logs from %s", r.RemoteAddr)
+
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight requests
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Ensure we can flush
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		log.Printf("Streaming not supported for %s", r.RemoteAddr)
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial message and history
+	fmt.Fprintf(w, "data: Connected to log stream\n\n")
+	flusher.Flush()
+
+	// Send historical logs
+	for _, msg := range logHistory {
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+	}
 
 	// Create a channel for this client
 	clientChan := make(chan string)
 
 	// Add this client's channel to the list of clients
 	go func() {
+		log.Printf("Starting log stream for %s", r.RemoteAddr)
 		for {
 			select {
 			case msg := <-logChan:
 				clientChan <- msg
 			case <-r.Context().Done():
+				log.Printf("Client %s disconnected", r.RemoteAddr)
 				return
 			}
 		}
@@ -351,21 +392,86 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case msg := <-clientChan:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
-			w.(http.Flusher).Flush()
+			_, err := fmt.Fprintf(w, "data: %s\n\n", msg)
+			if err != nil {
+				log.Printf("Error writing to client %s: %v", r.RemoteAddr, err)
+				return
+			}
+			flusher.Flush()
 		case <-r.Context().Done():
+			log.Printf("Client %s disconnected", r.RemoteAddr)
 			return
 		}
 	}
 }
 
+func logsPageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	html := `
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<title>Service Logs</title>
+		<style>
+			body { 
+				background-color: #1e1e1e;
+				color: #ffffff;
+				font-family: monospace;
+				margin: 0;
+				padding: 20px;
+			}
+			#logs {
+				white-space: pre-wrap;
+				word-wrap: break-word;
+			}
+			.log-entry {
+				margin: 2px 0;
+				padding: 2px 5px;
+				border-radius: 3px;
+			}
+			.log-entry:hover {
+				background-color: #2d2d2d;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="logs"></div>
+		<script>
+			const logsDiv = document.getElementById('logs');
+			const evtSource = new EventSource('/logs');
+			
+			evtSource.onmessage = function(event) {
+				const logEntry = document.createElement('div');
+				logEntry.className = 'log-entry';
+				logEntry.textContent = event.data;
+				logsDiv.appendChild(logEntry);
+				logsDiv.scrollTop = logsDiv.scrollHeight;
+			};
+			
+			evtSource.onerror = function(err) {
+				console.error("EventSource failed:", err);
+				evtSource.close();
+			};
+		</script>
+	</body>
+	</html>
+	`
+	fmt.Fprint(w, html)
+}
+
 func main() {
+	// Initialize log history
+	logHistory = make([]string, 0, maxLogHistory)
+
 	// Set up custom logger
 	log.SetOutput(&logWriter{log.New(os.Stdout, "", log.LstdFlags)})
 
 	log.Printf("Starting OCI Stage 2 Provision Service")
 	http.HandleFunc("/provision-baremetal-stage2", provisionHandler)
 	http.HandleFunc("/logs", logsHandler)
+	http.HandleFunc("/", logsPageHandler)
 
 	log.Printf("Server listening on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
