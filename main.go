@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"time"
 
@@ -55,6 +56,25 @@ type KafkaMessage struct {
 		CloudProvider  string `json:"cloudProvider"`
 		Operation      string `json:"operation"`
 	} `json:"payload"`
+}
+
+// Create a channel for log messages
+var logChan = make(chan string, 100)
+
+// Custom logger that writes to both stdout and our channel
+type logWriter struct {
+	*log.Logger
+}
+
+func (w *logWriter) Write(p []byte) (n int, err error) {
+	// Write to the channel
+	select {
+	case logChan <- string(p):
+	default:
+		// If channel is full, drop the message
+	}
+	// Write to stdout
+	return w.Logger.Writer().Write(p)
 }
 
 func provisionHandler(w http.ResponseWriter, r *http.Request) {
@@ -305,9 +325,47 @@ func publishToKafka(privateIP string, originalReq ProvisionRequest) {
 	log.Printf("Successfully published message to Kafka")
 }
 
+func logsHandler(w http.ResponseWriter, r *http.Request) {
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Create a channel for this client
+	clientChan := make(chan string)
+
+	// Add this client's channel to the list of clients
+	go func() {
+		for {
+			select {
+			case msg := <-logChan:
+				clientChan <- msg
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}()
+
+	// Stream logs to the client
+	for {
+		select {
+		case msg := <-clientChan:
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
+}
+
 func main() {
+	// Set up custom logger
+	log.SetOutput(&logWriter{log.New(os.Stdout, "", log.LstdFlags)})
+
 	log.Printf("Starting OCI Stage 2 Provision Service")
 	http.HandleFunc("/provision-baremetal-stage2", provisionHandler)
+	http.HandleFunc("/logs", logsHandler)
 
 	log.Printf("Server listening on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
